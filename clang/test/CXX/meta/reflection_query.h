@@ -134,6 +134,7 @@ enum reflection_query {
   query_has_default_argument,
 
   // Attributes
+  query_is_attribute,
   query_has_attribute,
 
   // Types
@@ -229,6 +230,10 @@ enum reflection_query {
   query_get_next_member,
   query_get_begin_base_spec,
   query_get_next_base_spec,
+  query_get_begin_attribute,
+  query_get_next_attribute,
+  query_get_begin_attribute_argument,
+  query_get_next_attribute_argument,
 
   // Type transformations
   query_remove_const,

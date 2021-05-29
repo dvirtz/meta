@@ -40,6 +40,7 @@ namespace clang {
   struct PrintingPolicy;
   struct InvalidReflection;
   class ReflectionModifiers;
+  class Attr;
 
 /// \brief The kind of construct reflected.
 enum ReflectionKind {
@@ -64,7 +65,11 @@ enum ReflectionKind {
   RK_base_specifier = 4,
 
   /// \brief An evaluated fragment value.
-  RK_fragment
+  RK_fragment,
+
+  /// \brief An attribute. Corresponds to an object of type
+  /// Attr*.
+  RK_attribute,
 };
 
 /// Symbolic representation of typeid(T) for some type T.
@@ -657,6 +662,9 @@ public:
 
   // Returns the modifiers to be applied to the reflection, upon injection.
   const ReflectionModifiers &getReflectionModifiers() const;
+
+  /// Returns the reflected attribute.
+  const Attr *getReflectedAttribute() const;
 
   /// Returns the offset into the parent which if
   /// reflected, results in this reflection.

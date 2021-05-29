@@ -2151,6 +2151,17 @@ public:
   }
 
   //===--------------------------------------------------------------------===//
+  //                         Reflection caching
+  //===--------------------------------------------------------------------===//
+  
+  using AttributeArgList = std::vector<const Expr *>;
+  using AttributeArgMap = llvm::DenseMap<const Attr*, AttributeArgList>;
+
+  /// For the subobject queries, the cached subobjects of a class in the
+  /// order they would appear in their layout.
+  mutable AttributeArgMap AllAttributeArguments;
+
+  //===--------------------------------------------------------------------===//
   //                         Type Sizing and Analysis
   //===--------------------------------------------------------------------===//
 

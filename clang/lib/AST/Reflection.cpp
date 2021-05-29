@@ -155,6 +155,7 @@ namespace clang {
     query_has_default_argument,
 
     // Attributes
+    query_is_attribute,
     query_has_attribute,
 
     // Types
@@ -250,6 +251,11 @@ namespace clang {
     query_get_next_member,
     query_get_begin_base_spec,
     query_get_next_base_spec,
+
+    query_get_begin_attribute,
+    query_get_next_attribute,
+    query_get_begin_attribute_argument,
+    query_get_next_attribute_argument,
 
     // Type transformations
     query_remove_const,
@@ -416,6 +422,10 @@ static bool CustomError(const Reflection &R, F BuildDiagnostic) {
   }
   return false;
 }
+
+using OptionalAPValue = llvm::Optional<APValue>;
+using OptionalExpr    = llvm::Optional<const Expr *>;
+using OptionalString  = llvm::Optional<std::string>;
 
 /// Returns the type reflected by R. R must be a type reflection.
 ///
@@ -1490,6 +1500,11 @@ static bool isTemplateTemplateParameter(const Reflection &R, APValue &Result) {
   return SuccessFalse(R, Result);
 }
 
+/// Returns true if R designates a function parameter.
+static bool isAttribute(const Reflection &R, APValue &Result) {
+  return SuccessBool(R, Result, R.isAttribute());
+}
+
 /// Returns true if R designates a parameter with a default argument.
 static bool hasDefaultArgument(const Reflection &R, APValue &Result) {
   if (const Decl *D = getReachableDecl(R)) {
@@ -1571,7 +1586,7 @@ static bool hasAttribute(ReflectionQueryEvaluator &Eval,
 
   if (const Decl *D = getReachableDecl(R)) {
     for (Attr *A : D->attrs()) {
-      if (A->getSpelling() == *OptAttributeToFind)
+      if (A->getNormalizedFullName() == *OptAttributeToFind)
         return SuccessTrue(Eval, Result);
     }
   }
@@ -2240,6 +2255,8 @@ bool ReflectionQueryEvaluator::EvaluatePredicate(SmallVectorImpl<APValue> &Args,
     return hasDefaultArgument(makeReflection(*this, Args[1]), Result);
 
   // Attributes
+  case query_is_attribute:
+    return isAttribute(makeReflection(*this, Args[1]), Result);
   case query_has_attribute:
     return hasAttribute(*this, Args, Result);
 
@@ -2387,6 +2404,14 @@ static bool makeReflection(APValue &Result) {
   return true;
 }
 
+/// Same as above.
+///
+/// TODO: Deprecate the fucntion above.
+static bool makeInvalidReflection(APValue &Result) {
+  Result = APValue(RK_invalid, nullptr);
+  return true;
+}
+
 /// Set Result to a reflection of D.
 static bool makeReflection(const Decl *D, APValue &Result) {
   if (!D)
@@ -2438,6 +2463,18 @@ static bool makeReflection(const Reflection &R,
                            const ReflectionModifiers &M, APValue &Result) {
   Result = APValue(R.getKind(), R.getOpaqueValue(), M);
   return true;
+}
+
+/// Set Result to a reflection of A, at the given offset,
+/// for a parent reflection P.
+static bool makeReflection(const Attr *A, unsigned Offset, const APValue &P,
+                           APValue &Result) {
+  if (A) {
+    Result = APValue(RK_attribute, A, Offset, P);
+    return true;
+  }
+
+  return makeReflection(Result);
 }
 
 static bool getType(const Reflection &R, APValue &Result) {
@@ -2784,6 +2821,127 @@ static bool getNextBaseSpec(const Reflection &R, APValue &Result) {
   return Error(R);
 }
 
+static const Attr *
+getAttribute(const Decl *D, unsigned Index) {
+  const auto &Attrs = D->getAttrs();
+  if (Index < Attrs.size())
+    return Attrs[Index];
+
+  return nullptr;
+}
+
+static bool
+getAttribute(const Reflection &R, unsigned Index, APValue &Result) {
+  if (const Decl *D = getReachableDecl(R)) {
+    APValue ParentRefl;
+    if (!makeReflection(D, ParentRefl))
+      llvm_unreachable("decl reflection creation failed");
+
+    const auto *Attr = getAttribute(D, Index);
+    return makeReflection(Attr, Index + 1, ParentRefl, Result);
+  }
+
+  return Error(R);
+}
+
+// Returns the first attribute of an entity.
+static bool getBeginAttribute(const Reflection &R, APValue &Result) {
+  return getAttribute(R, 0, Result);
+}
+
+// Returns the next member in a class.
+static bool getNextAttribute(const Reflection &R, APValue &Result) {
+  if (R.isAttribute() && R.hasParent()) {
+    Reflection Parent = R.getParent();
+
+    // Note the offset stored is starts at 1, the offset used starts at 0
+    // so no addition is required here.
+    return getAttribute(Parent, R.getOffsetInParent(), Result);
+  }
+
+  return Error(R);
+}
+
+static ASTContext::AttributeArgList getAttributeArguments(ASTContext &Context,
+                                                          const Attr *A) {
+  ASTContext::AttributeArgList res;
+  const auto addString = [&](StringRef arg) {
+    if (!arg.empty()) {
+      res.push_back(Context.getPredefinedStringLiteralFromCache(arg));
+    }
+  };
+  switch (A->getKind()) {
+  case attr::Deprecated: {
+    const auto Deprecated = cast<DeprecatedAttr>(A);
+    addString(Deprecated->getMessage());
+    addString(Deprecated->getReplacement());
+  } break;
+  case attr::WarnUnusedResult: {
+    const auto WarnUnusedResult = cast<WarnUnusedResultAttr>(A);
+    addString(WarnUnusedResult->getMessage());
+  } break;
+  default:
+    break;
+  }
+  return res;
+}
+
+/// Sets Result to be a attribute argument index. The "value" is the argument, N
+/// is the index into the list, and Attr stores the attribute used to "key" the
+/// list.
+static bool makeAttributeArgumentIndex(const Expr *E, unsigned N,
+                                       const APValue &Attr, APValue &Result) {
+  Result = APValue(RK_expression, E, N, Attr);
+  return true;
+}
+
+// Returns the first attribute of an entity.
+static bool getBeginAttributeArgument(const Reflection &R, APValue &Result) {
+  if (R.isAttribute()) {
+    const auto Attr = R.getAsAttribute();
+    ASTContext &Ctx = R.getContext();
+    auto Insertion = Ctx.AllAttributeArguments.try_emplace(
+        Attr, ASTContext::AttributeArgList{});
+    auto &Arguments = Insertion.first->second;
+    if (Insertion.second)
+      Arguments = getAttributeArguments(Ctx, Attr);
+
+    if (Arguments.empty())
+      return makeInvalidReflection(Result);
+
+    // The iterator is kind of complicated.
+    APValue AttrValue{RK_attribute, Attr};
+    makeAttributeArgumentIndex(Arguments[0], 1, AttrValue, Result);
+    assert(Result.hasParentReflection());
+    return true;
+  }
+
+  return Error(R);
+}
+
+// Returns the next member in a class.
+static bool getNextAttributeArgument(const Reflection &R, APValue &Result) {
+  // FIXME: Implement some kind of error checking.
+  //
+  // Get the expression from the reflection.
+  Reflection AttrRefl = R.getParent(); // Not really a parent.
+  auto const *Attr = AttrRefl.getAsAttribute();
+
+  // Build the value.
+  ASTContext &Ctx = R.getContext();
+  auto Iter = Ctx.AllAttributeArguments.find(Attr);
+  if (Iter != Ctx.AllAttributeArguments.end()) {
+    auto &Arguments = Iter->second;
+    std::size_t N = R.getOffsetInParent();
+    if (N == Arguments.size())
+      return makeInvalidReflection(Result);
+    APValue AttrValue{RK_attribute, Attr};
+    return makeAttributeArgumentIndex(Arguments[N], N + 1, AttrValue, Result);
+  }
+
+  return Error(R);
+}
+
 // [meta.trans.cv]p1:
 // The member typedef type names the same type as T except that any top-level
 // const-qualifier has been removed.
@@ -3081,6 +3239,16 @@ bool Reflection::GetAssociatedReflection(ReflectionQuery Q, APValue &Result) {
   case query_get_next_base_spec:
     return getNextBaseSpec(*this, Result);
 
+  case query_get_begin_attribute:
+    return getBeginAttribute(*this, Result);
+  case query_get_next_attribute:
+    return getNextAttribute(*this, Result);
+
+  case query_get_begin_attribute_argument:
+    return getBeginAttributeArgument(*this, Result);
+  case query_get_next_attribute_argument:
+    return getNextAttributeArgument(*this, Result);
+
   // Type transformation
   case query_remove_const:
     return removeConst(*this, Result);
@@ -3148,27 +3316,32 @@ static bool getName(const Reflection R, APValue &Result) {
     return true;
   }
 
-  if (R.isType()) {
-    QualType T = getQualType(R);
+  const auto Name = [&]() -> OptionalString {
+    if (R.isType()) {
+      QualType T = getQualType(R);
 
-    // Render the string of the type.
-    PrintingPolicy PP = Ctx.getPrintingPolicy();
-    PP.SuppressTagKeyword = true;
-    Expr *Str = MakeConstCharPointer(Ctx, T.getAsString(PP), SourceLocation());
+      // Render the string of the type.
+      PrintingPolicy PP = Ctx.getPrintingPolicy();
+      PP.SuppressTagKeyword = true;
+      return T.getAsString(PP);
+    }
 
-    // Generate the result value.
-    Expr::EvalResult Eval;
-    Expr::EvalContext EvalCtx(Ctx, nullptr);
-    if (!Str->EvaluateAsConstantExpr(Eval, EvalCtx))
-      return false;
-    Result = Eval.Val;
-    return true;
-  }
+    if (R.isAttribute()) {
+      auto A = R.getAsAttribute();
 
-  if (const NamedDecl *ND = getReachableNamedAliasDecl(R)) {
+      return A->getNormalizedFullName();
+    }
+
+    if (const NamedDecl *ND = getReachableNamedAliasDecl(R)) {
+      return ND->getDeclName().getAsString();
+    }
+
+    return {};
+  }();
+
+  if (Name) {
     // Get the identifier of the declaration.
-    Expr *Str = MakeConstCharPointer(Ctx, ND->getDeclName().getAsString(),
-                                     SourceLocation());
+    Expr *Str = MakeConstCharPointer(Ctx, *Name, SourceLocation());
 
     // Generate the result value.
     Expr::EvalResult Eval;

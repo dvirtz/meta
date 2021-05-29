@@ -156,6 +156,7 @@ enum reflection_query : unsigned {
   query_has_default_argument,
 
   // Attributes
+  query_is_attribute,
   query_has_attribute,
 
   // Types
@@ -251,6 +252,10 @@ enum reflection_query : unsigned {
   query_get_next_member,
   query_get_begin_base_spec,
   query_get_next_base_spec,
+  query_get_begin_attribute,
+  query_get_next_attribute,
+  query_get_begin_attribute_argument,
+  query_get_next_attribute_argument,
 
   // Type transformations
   query_remove_const,
@@ -3176,6 +3181,38 @@ constexpr struct next_base_spec_fn
   }
 } next_base_spec;
 
+// Returns the first attribute of the reflected entity.
+constexpr struct front_attribute_fn
+{
+  consteval info operator()(info reflection) const {
+    return __reflect(detail::query_get_begin_attribute, reflection);
+  }
+} front_attribute;
+
+// Returns the next attribute of the reflected entity.
+constexpr struct next_attribute_fn
+{
+  consteval info operator()(info reflection) const {
+    return __reflect(detail::query_get_next_attribute, reflection);
+  }
+} next_attribute;
+
+// Returns the first attribute of the reflected entity.
+constexpr struct front_attribute_argument_fn
+{
+  consteval info operator()(info reflection) const {
+    return __reflect(detail::query_get_begin_attribute_argument, reflection);
+  }
+} front_attribute_argument;
+
+// Returns the next attribute of the reflected entity.
+constexpr struct next_attribute_argument_fn
+{
+  consteval info operator()(info reflection) const {
+    return __reflect(detail::query_get_next_attribute_argument, reflection);
+  }
+} next_attribute_argument;
+
 // Deprecated in favor of more specific iterator classes.
 class [[deprecated]] iterator {
   meta::info m_info;
@@ -3252,6 +3289,12 @@ using template_param_range = detail::range<template_param_iterator>;
 
 using base_spec_iterator = detail::iterator<front_base_spec_fn, next_base_spec_fn>;
 using base_spec_range = detail::range<base_spec_iterator>;
+
+using attribute_iterator = detail::iterator<front_attribute_fn, next_attribute_fn>;
+using attribute_range = detail::range<attribute_iterator>;
+
+using attribute_argument_iterator = detail::iterator<front_attribute_argument_fn, next_attribute_argument_fn>;
+using attribute_argument_range = detail::range<attribute_argument_iterator>;
 
 // Ranges
 
@@ -3362,7 +3405,47 @@ consteval void make_public(info& base_or_mem) {
   __reflect_mod(detail::query_set_access, base_or_mem, detail::am_public);
 }
 
+template<typename P>
+consteval auto attributes_of(info reflection, P pred) {
+  using iterator = detail::iterator<front_attribute_fn, next_attribute_fn, P>;
+  using range = detail::range<iterator>;
+  return range(reflection, pred);
+}
+
+template<typename... Ps>
+consteval auto attributes_of(info reflection, Ps... preds) {
+  return attributes_of(reflection, [&](info reflection) {
+    return (preds(reflection) && ...);
+  });
+}
+
+template<typename P>
+consteval auto attributes_of(info reflection) {
+  return attributes_of(reflection, detail::always_true);
+}
+
+template<typename P>
+consteval auto attribute_arguments_of(info reflection, P pred) {
+  using iterator = detail::iterator<front_attribute_argument_fn, next_attribute_argument_fn, P>;
+  using range = detail::range<iterator>;
+  return range(reflection, pred);
+}
+
+template<typename... Ps>
+consteval auto attribute_arguments_of(info reflection, Ps... preds) {
+  return attributes_of(reflection, [&](info reflection) {
+    return (preds(reflection) && ...);
+  });
+}
+
+template<typename P>
+consteval auto attribute_arguments_of(info reflection) {
+  return attributes_of(reflection, detail::always_true);
+}
+
 // Requires: is_base_class(base_or_mem) or is_class_member(base_or_mem)
+// Returns the first sub-object of reflection. Objects behave
+// as forward iterators.
 //
 // Updates the value of base_or_mem adding a protected access modifier.
 // When injected via declaration cloning, this access modifier will result

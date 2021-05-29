@@ -657,6 +657,11 @@ void APValue::Profile(llvm::FoldingSetNodeID &ID) const {
   llvm_unreachable("Unknown APValue kind!");
 }
 
+const Attr *APValue::getReflectedAttribute() const {
+  assert(getReflectionKind() == RK_attribute);
+  return reinterpret_cast<const Attr *>(getOpaqueReflectionValue());
+}
+
 static double GetApproxValue(const llvm::APFloat &F) {
   llvm::APFloat V = F;
   bool ignored;

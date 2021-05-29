@@ -497,6 +497,11 @@ public:
     return getKind() == RK_base_specifier;
   }
 
+  /// True if this reflects a base class specifier.
+  bool isAttribute() const {
+    return getKind() == RK_attribute;
+  }
+
   /// Returns this as an invalid reflection.
   const InvalidReflection *getAsInvalidReflection() const {
     return Ref.getInvalidReflectionInfo();
@@ -529,6 +534,10 @@ public:
   /// Returns the modifiers associated with this reflection.
   const ReflectionModifiers &getModifiers() const {
     return Ref.getReflectionModifiers();
+  }
+  
+  const Attr* getAsAttribute() const {
+    return Ref.getReflectedAttribute();
   }
 
   unsigned getOffsetInParent() const {
