@@ -2,6 +2,8 @@
 
 #include "../reflection_query.h"
 
+extern "C" int puts(char const* str);
+
 using string_type = const char *;
 
 constexpr bool string_eq(string_type s1, string_type s2) {
@@ -61,3 +63,19 @@ static_assert(is_invalid(endarg));
 
 constexpr meta::info end = __reflect(query_get_next_attribute, nodiscard);
 static_assert(is_invalid(end));
+
+namespace decorate {
+
+template<typename F>
+auto logger(F&& f) {
+  return [f]<typename... Args>(Args... args) {
+    puts(__concatenate("calling ", __reflect(query_get_name, reflexpr(f))));
+    return f(args...);
+  };
+}
+
+[[decorator(logger)]] void fn();
+
+} // namespace decorate
+
+static_assert(__reflect(query_has_attribute, reflexpr(decorate::fn), "decorator"));

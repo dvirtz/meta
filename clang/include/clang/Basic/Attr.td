@@ -3611,3 +3611,9 @@ def Builtin : InheritableAttr {
   let SemaHandler = 0;
   let Documentation = [Undocumented];
 }
+
+def Reflected : InheritableAttr {
+  let Spellings = [];
+  let Args = [VariadicExprArgument<"Args">];
+  let Documentation = [ReflectedDocs];
+}

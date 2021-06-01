@@ -7405,11 +7405,22 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   // though they were unknown attributes.
   if (AL.getKind() == ParsedAttr::UnknownAttribute ||
       !AL.existsInTarget(S.Context.getTargetInfo())) {
-    S.Diag(AL.getLoc(),
-           AL.isDeclspecAttribute()
-               ? (unsigned)diag::warn_unhandled_ms_attribute_ignored
-               : (unsigned)diag::warn_unknown_attribute_ignored)
-        << AL;
+    if (S.getLangOpts().Reflection) {
+      /// keep unknown attributes in case user wants to reflect them
+      SmallVector<Expr *, 1> Args;
+      for (unsigned Idx = 0; Idx < AL.getNumArgs(); ++Idx) {
+        Expr *ArgExp = AL.getArgAsExpr(Idx);
+        Args.push_back(ArgExp);
+      }
+      D->addAttr(
+          ReflectedAttr::Create(S.Context, Args.data(), Args.size(), AL));
+    } else {
+      S.Diag(AL.getLoc(),
+            AL.isDeclspecAttribute()
+                ? (unsigned)diag::warn_unhandled_ms_attribute_ignored
+                : (unsigned)diag::warn_unknown_attribute_ignored)
+          << AL;
+    }
     return;
   }
 

@@ -5489,3 +5489,11 @@ Requirements on Development Tools - Engineering Specification Documentation
 <https://developer.arm.com/docs/ecm0359818/latest/>`_ for more information.
   }];
 }
+
+def ReflectedDocs : Documentation {
+  let Category = DocCatDecl;
+  let Content = [{
+  Created for an unknown attribute when running with reflection on. 
+  Can be used to reflect over user defined attributes.
+  }];
+}
