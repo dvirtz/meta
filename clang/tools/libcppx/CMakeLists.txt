@@ -67,7 +67,7 @@ option(LIBCPPX_INSTALL_HEADERS "Install the libcppx headers." ON)
 option(LIBCPPX_INSTALL_CMAKE_PACKAGE
   "Install the CMake config-file package for libcppx." ON)
 
-set(LIBCPPX_INSTALL_INCLUDE_DIR include)
+set(LIBCPPX_INSTALL_INCLUDE_DIR include/c++/v1)
 if(WIN32 AND NOT CYGWIN)
   set(LIBCPPX_INSTALL_PACKAGE_DIR cmake)
 else()
