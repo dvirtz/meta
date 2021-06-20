@@ -359,8 +359,9 @@ unsigned Parser::ParseAttributeArgsCommon(
 
     // If we don't know how to parse this attribute, but this is the only
     // token in this argument, assume it's meant to be an identifier.
-    if (AttrKind == ParsedAttr::UnknownAttribute ||
-        AttrKind == ParsedAttr::IgnoredAttribute) {
+    // With reflection on parse all arguments as expressions
+    if ((AttrKind == ParsedAttr::UnknownAttribute ||
+         AttrKind == ParsedAttr::IgnoredAttribute) && !getLangOpts().Reflection) {
       const Token &Next = NextToken();
       IsIdentifierArg = Next.isOneOf(tok::r_paren, tok::comma);
     }

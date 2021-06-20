@@ -517,6 +517,9 @@ static const Decl *getReachableAliasDecl(const Reflection &R) {
     return getEntityDecl(R.getAsExpression());
   if (R.isBase())
     return getAsTypeAliasDecl(R.getAsBase()->getType());
+  if (R.isAttribute()) {
+    return getReachableAliasDecl(R.getParent());
+  }
   return nullptr;
 }
 
@@ -635,7 +638,7 @@ static const NamedDecl *getReachableNamedAliasDecl(const Reflection &R) {
 
 /// Returns true if R is named.
 static bool isNamed(const Reflection &R, APValue &Result) {
-  if (R.isType())
+  if (R.isType() || R.isAttribute())
     return SuccessTrue(R, Result);
 
   if (getReachableNamedAliasDecl(R))
@@ -2879,6 +2882,10 @@ static ASTContext::AttributeArgList getAttributeArguments(ASTContext &Context,
   case attr::WarnUnusedResult: {
     const auto WarnUnusedResult = cast<WarnUnusedResultAttr>(A);
     addString(WarnUnusedResult->getMessage());
+  } break;
+  case attr::Reflected: {
+    const auto Reflected = cast<ReflectedAttr>(A);
+    std::copy(Reflected->args_begin(), Reflected->args_end(), std::back_inserter(res));
   } break;
   default:
     break;

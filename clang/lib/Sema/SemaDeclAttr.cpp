@@ -7406,7 +7406,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   if (AL.getKind() == ParsedAttr::UnknownAttribute ||
       !AL.existsInTarget(S.Context.getTargetInfo())) {
     if (S.getLangOpts().Reflection) {
-      /// keep unknown attributes in case user wants to reflect them
+      // keep unknown attributes in case user wants to reflect them
       SmallVector<Expr *, 1> Args;
       for (unsigned Idx = 0; Idx < AL.getNumArgs(); ++Idx) {
         Expr *ArgExp = AL.getArgAsExpr(Idx);

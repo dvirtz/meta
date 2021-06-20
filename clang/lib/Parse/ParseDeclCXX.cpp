@@ -4396,8 +4396,9 @@ bool Parser::ParseCXX11AttributeArgs(IdentifierInfo *AttrName,
 
   // If the attribute isn't known, we will not attempt to parse any
   // arguments.
+  // keep unknown attributes in case user wants to reflect them
   if (!hasAttribute(LO.CPlusPlus ? AttrSyntax::CXX : AttrSyntax::C, ScopeName,
-                    AttrName, getTargetInfo(), getLangOpts())) {
+                    AttrName, getTargetInfo(), getLangOpts()) && !getLangOpts().Reflection) {
     // Eat the left paren, then skip to the ending right paren.
     ConsumeParen();
     SkipUntil(tok::r_paren);

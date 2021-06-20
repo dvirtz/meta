@@ -3433,14 +3433,14 @@ consteval auto attribute_arguments_of(info reflection, P pred) {
 
 template<typename... Ps>
 consteval auto attribute_arguments_of(info reflection, Ps... preds) {
-  return attributes_of(reflection, [&](info reflection) {
+  return attribute_arguments_of(reflection, [&](info reflection) {
     return (preds(reflection) && ...);
   });
 }
 
 template<typename P>
 consteval auto attribute_arguments_of(info reflection) {
-  return attributes_of(reflection, detail::always_true);
+  return attribute_arguments_of(reflection, detail::always_true);
 }
 
 // Requires: is_base_class(base_or_mem) or is_class_member(base_or_mem)
